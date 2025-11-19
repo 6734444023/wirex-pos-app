@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "765914384064",
+    "project_id": "wirexmenu-2fd27",
+    "storage_bucket": "wirexmenu-2fd27.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:765914384064:android:efe4a52db0682f7c854f25",
+        "android_client_info": {
+          "package_name": "com.example.flutter_application_1"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "765914384064-tehd2l9b0cqunqcdjvcs49ioch7a1pps.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYTa5T0VHofIq1tuyQNFOytwEbLCV-1wE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "765914384064-tehd2l9b0cqunqcdjvcs49ioch7a1pps.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
