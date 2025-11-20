@@ -1,0 +1,520 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:intl/intl.dart';
+import 'edit_shop_product_page.dart'; // Import หน้าจัดการสินค้า
+import 'services/onepay_service.dart';
+import 'services/transaction_service.dart';
+import 'receipt_page.dart';
+
+class ShopPage extends StatefulWidget {
+  const ShopPage({super.key});
+
+  @override
+  State<ShopPage> createState() => _ShopPageState();
+}
+
+class _ShopPageState extends State<ShopPage> {
+  final Color darkBlue = const Color(0xFF1E2444);
+  final Color lightBlue = const Color(0xFFB3BCF5);
+  final user = FirebaseAuth.instance.currentUser;
+  String _searchQuery = "";
+
+  Map<String, int> cart = {};
+  Map<String, Map<String, dynamic>> productData = {};
+  final NumberFormat currencyFormat = NumberFormat("#,##0", "en_US");
+  
+  Timer? _pollTimer;
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _addToCart(String docId, Map<String, dynamic> data) {
+    setState(() {
+      cart[docId] = (cart[docId] ?? 0) + 1;
+      productData[docId] = data;
+    });
+  }
+
+  void _removeFromCart(String docId) {
+    setState(() {
+      if (cart[docId] != null && cart[docId]! > 0) {
+        cart[docId] = cart[docId]! - 1;
+        if (cart[docId] == 0) {
+          cart.remove(docId);
+          productData.remove(docId);
+        }
+      }
+    });
+  }
+
+  double _calculateTotal() {
+    double total = 0;
+    cart.forEach((key, quantity) {
+      if (productData[key] != null) {
+        total += (productData[key]!['price'] ?? 0) * quantity;
+      }
+    });
+    return total;
+  }
+
+  int _calculateTotalItems() {
+    int count = 0;
+    cart.forEach((key, quantity) {
+      count += quantity;
+    });
+    return count;
+  }
+
+  void _goToReceipt({double cashReceived = 0, double change = 0}) {
+    List<Map<String, dynamic>> orderItems = [];
+    cart.forEach((docId, quantity) {
+      if (productData[docId] != null) {
+        orderItems.add({
+          'name': productData[docId]!['name'],
+          'price': productData[docId]!['price'],
+          'quantity': quantity,
+        });
+      }
+    });
+    
+    double finalTotal = _calculateTotal();
+
+    // Save Transaction
+    TransactionService.saveTransaction(
+      orderId: "SHOP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
+      amount: finalTotal,
+      type: 'shop',
+      status: 'paid',
+      items: orderItems,
+      paymentMethod: cashReceived > 0 ? 'cash' : 'qr',
+      cashReceived: cashReceived > 0 ? cashReceived : finalTotal,
+      change: change,
+    );
+
+    setState(() {
+      cart.clear();
+      productData.clear();
+    });
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ReceiptPage(
+          orderData: {'orderId': "SHOP-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}"},
+          items: orderItems,
+          totalAmount: finalTotal,
+          cashReceived: cashReceived,
+          change: change,
+        ),
+      ),
+    );
+  }
+
+  void _showCashDialog(double totalAmount) {
+    final cashController = TextEditingController();
+    double change = 0;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setStateDialog) {
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: const Text("รับเงินสด", textAlign: TextAlign.center),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("ยอดชำระ: ${currencyFormat.format(totalAmount)} LAK", style: TextStyle(fontSize: 18, color: darkBlue, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 20),
+                TextField(
+                  controller: cashController,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: "จำนวนเงินที่รับมา",
+                    border: OutlineInputBorder(),
+                    suffixText: "LAK",
+                  ),
+                  onChanged: (value) {
+                    double received = double.tryParse(value) ?? 0;
+                    setStateDialog(() {
+                      change = received - totalAmount;
+                    });
+                  },
+                ),
+                const SizedBox(height: 20),
+                if (change >= 0)
+                  Text("เงินทอน: ${currencyFormat.format(change)} LAK", style: const TextStyle(fontSize: 20, color: Colors.green, fontWeight: FontWeight.bold))
+                else
+                  Text("ขาดอีก: ${currencyFormat.format(change.abs())} LAK", style: const TextStyle(fontSize: 16, color: Colors.red)),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+              ElevatedButton(
+                onPressed: (change >= 0 && cashController.text.isNotEmpty)
+                    ? () {
+                        Navigator.pop(context);
+                        double received = double.tryParse(cashController.text) ?? 0;
+                        _goToReceipt(cashReceived: received, change: change);
+                      }
+                    : null,
+                style: ElevatedButton.styleFrom(backgroundColor: darkBlue),
+                child: const Text("ยืนยันการชำระ", style: TextStyle(color: Colors.white)),
+              ),
+            ],
+          );
+        });
+      },
+    );
+  }
+
+  void _showQRCodeDialog(String qrData, double amount, int itemCount, String orderId) {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (timer) async {
+      bool isPaid = await OnepayService.checkPaymentStatus(orderId);
+      if (isPaid) {
+        timer.cancel();
+        if (mounted) {
+          Navigator.pop(context);
+          _goToReceipt();
+        }
+      }
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: Colors.white,
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // QR Code
+                Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.red, width: 2),
+                  ),
+                  child: QrImageView(
+                    data: qrData,
+                    version: QrVersions.auto,
+                    size: 200,
+                    backgroundColor: Colors.white,
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                const Text("รับชำระ / Support QR", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 8),
+                // Bank Logos
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _buildBankIcon(Colors.red, "One"),
+                    _buildBankIcon(Colors.blue, "BFL"),
+                    _buildBankIcon(Colors.green, "JDB"),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+                const Divider(color: Colors.grey, thickness: 0.5),
+                const SizedBox(height: 16),
+
+                // Stats
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("ยอดชำระรวม", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                        Text("${currencyFormat.format(amount)} LAK", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text("จำนวนรายการ", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                        Text("$itemCount รายการ", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
+
+                // ปุ่มยกเลิก
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      _pollTimer?.cancel();
+                      Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: darkBlue),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    child: Text("ยกเลิก / ปิด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBankIcon(Color color, String text) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color),
+      ),
+      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: IconThemeData(color: darkBlue),
+        centerTitle: true,
+        title: Text("ร้านขายของ", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.edit_note, color: darkBlue),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const EditShopProductPage()),
+            ),
+          )
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: TextField(
+              onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
+              decoration: InputDecoration(
+                hintText: "ค้นหาชื่อสินค้า หรือ บาร์โค้ด",
+                prefixIcon: Icon(Icons.search, color: darkBlue),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide(color: darkBlue, width: 1.5),
+                ),
+              ),
+            ),
+          ),
+          
+          // --- Product Grid (จาก shop_products) ---
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              // ✅ เปลี่ยนเป็น shop_products
+              stream: FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(user?.uid)
+                  .collection('shop_products')
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                
+                final allDocs = snapshot.data!.docs;
+                final filteredDocs = _searchQuery.isEmpty
+                    ? allDocs
+                    : allDocs.where((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final name = (data['name'] ?? '').toString().toLowerCase();
+                        final barcode = (data['barcode'] ?? '').toString().toLowerCase();
+                        return name.contains(_searchQuery) || barcode.contains(_searchQuery);
+                      }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return const Center(child: Text('ไม่พบสินค้า'));
+                }
+
+                return GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 0.75, // ปรับสัดส่วนเผื่อบาร์โค้ด
+                  ),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    var doc = filteredDocs[index];
+                    var data = doc.data() as Map<String, dynamic>;
+                    int qty = cart[doc.id] ?? 0;
+
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                                image: DecorationImage(
+                                  image: (data['imageUrl'] != null && data['imageUrl'] != "")
+                                      ? NetworkImage(data['imageUrl'])
+                                      : const AssetImage('assets/placeholder.png') as ImageProvider,
+                                  fit: BoxFit.cover,
+                                ),
+                                color: Colors.grey[200],
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(12.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (data['barcode'] != null && data['barcode'] != "")
+                                  Text("Code: ${data['barcode']}", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text("${currencyFormat.format(data['price'])} LAK", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                    if (qty == 0)
+                                      GestureDetector(
+                                        onTap: () => _addToCart(doc.id, data),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(color: darkBlue, borderRadius: BorderRadius.circular(8)),
+                                          child: const Icon(Icons.add, color: Colors.white, size: 18),
+                                        ),
+                                      )
+                                    else
+                                      Row(
+                                        children: [
+                                          GestureDetector(
+                                            onTap: () => _removeFromCart(doc.id),
+                                            child: Icon(Icons.remove_circle, color: darkBlue, size: 24),
+                                          ),
+                                          Padding(
+                                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                                            child: Text("$qty", style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          ),
+                                          GestureDetector(
+                                            onTap: () => _addToCart(doc.id, data),
+                                            child: Icon(Icons.add_circle, color: darkBlue, size: 24),
+                                          ),
+                                        ],
+                                      )
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+
+          // --- Bottom Panel ---
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4F6F9),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+              boxShadow: [BoxShadow(color: Colors.grey.withOpacity(0.1), spreadRadius: 5, blurRadius: 20, offset: const Offset(0, -5))],
+            ),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () {},
+                      style: OutlinedButton.styleFrom(side: BorderSide(color: darkBlue, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), backgroundColor: Colors.white),
+                      child: Text("บันทึก", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text("Total: ${currencyFormat.format(_calculateTotal())} LAK", style: TextStyle(color: darkBlue, fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        double total = _calculateTotal();
+                        if (total > 0) _showCashDialog(total);
+                        else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("กรุณาเลือกรายการ")));
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: lightBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                      child: Text("เงินสด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        double subtotal = _calculateTotal();
+                        if (subtotal <= 0) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("กรุณาเลือกรายการสินค้าก่อน")));
+                          return;
+                        }
+                        showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
+                        String orderId = "SHOP-${DateTime.now().millisecondsSinceEpoch}";
+                        String? qrCode = await OnepayService.generateQR(amount: subtotal, orderId: orderId, description: "Shop Order");
+                        Navigator.pop(context);
+                        if (qrCode != null) _showQRCodeDialog(qrCode, subtotal, _calculateTotalItems(), orderId);
+                        else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ไม่สามารถสร้าง QR Code ได้")));
+                      },
+                      style: ElevatedButton.styleFrom(backgroundColor: darkBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
+                      child: const Text("สร้าง QR Code", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
