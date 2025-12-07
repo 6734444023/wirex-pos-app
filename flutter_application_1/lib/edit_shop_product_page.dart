@@ -4,6 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class EditShopProductPage extends StatefulWidget {
   const EditShopProductPage({super.key});
@@ -19,6 +22,11 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
 
   Future<void> _pickImage(StateSetter setStateDialog) async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
@@ -55,7 +63,7 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: const Text("เพิ่มสินค้าใหม่"),
+            title: Text(tr('add_new_product')),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -81,7 +89,7 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Icon(Icons.camera_alt, color: Colors.grey[600], size: 40),
-                                Text("แตะเพื่อเลือกรูป", style: TextStyle(color: Colors.grey[600])),
+                                Text(tr('tap_to_pick_image'), style: TextStyle(color: Colors.grey[600])),
                               ],
                             )
                           : null,
@@ -90,20 +98,20 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
                   const SizedBox(height: 16),
                   TextField(
                     controller: nameController,
-                    decoration: const InputDecoration(labelText: "ชื่อสินค้า"),
+                    decoration: InputDecoration(labelText: tr('product_name')),
                   ),
                   TextField(
                     controller: priceController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: "ราคา (LAK)"),
+                    decoration: InputDecoration(labelText: tr('price_lak')),
                   ),
                   // ✅ เพิ่มช่องกรอกบาร์โค้ด
                   TextField(
                     controller: barcodeController,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: "รหัสบาร์โค้ด",
-                      prefixIcon: Icon(Icons.qr_code),
+                    decoration: InputDecoration(
+                      labelText: tr('barcode'),
+                      prefixIcon: const Icon(Icons.qr_code),
                     ),
                   ),
                 ],
@@ -112,7 +120,7 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
             actions: [
               TextButton(
                 onPressed: _isUploading ? null : () => Navigator.pop(context),
-                child: const Text("ยกเลิก"),
+                child: Text(tr('cancel')),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: darkBlue),
@@ -148,7 +156,7 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
                       },
                 child: _isUploading
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text("บันทึก", style: TextStyle(color: Colors.white)),
+                    : Text(tr('save'), style: const TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -177,7 +185,7 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: darkBlue),
         centerTitle: true,
-        title: Text("จัดการสินค้า", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+        title: Text(tr('manage_products'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
@@ -214,7 +222,7 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
                       children: [
                         Icon(Icons.add, size: 40, color: darkBlue),
                         const SizedBox(height: 8),
-                        Text("เพิ่มสินค้า", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+                        Text(tr('add_product'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -253,13 +261,13 @@ class _EditShopProductPageState extends State<EditShopProductPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                data['name'] ?? 'No Name',
+                                data['name'] ?? tr('no_name'),
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                 maxLines: 1, overflow: TextOverflow.ellipsis,
                               ),
                               // ✅ แสดงบาร์โค้ด
                               if (data['barcode'] != null && data['barcode'] != "")
-                                Text("Barcode: ${data['barcode']}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                                Text("${tr('barcode')}: ${data['barcode']}", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
                               
                               const SizedBox(height: 4),
                               Text("${data['price']} LAK", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),

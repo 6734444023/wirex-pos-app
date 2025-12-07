@@ -2,12 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import 'edit_shop_product_page.dart'; // Import หน้าจัดการสินค้า
 import 'services/onepay_service.dart';
 import 'services/transaction_service.dart';
 import 'receipt_page.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class ShopPage extends StatefulWidget {
   const ShopPage({super.key});
@@ -27,6 +30,11 @@ class _ShopPageState extends State<ShopPage> {
   final NumberFormat currencyFormat = NumberFormat("#,##0", "en_US");
   
   Timer? _pollTimer;
+
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
 
   @override
   void dispose() {
@@ -71,7 +79,7 @@ class _ShopPageState extends State<ShopPage> {
     return count;
   }
 
-  void _goToReceipt({double cashReceived = 0, double change = 0}) {
+  void _goToReceipt({double cashReceived = 0, double change = 0, bool autoPrint = false}) {
     List<Map<String, dynamic>> orderItems = [];
     cart.forEach((docId, quantity) {
       if (productData[docId] != null) {
@@ -111,6 +119,7 @@ class _ShopPageState extends State<ShopPage> {
           totalAmount: finalTotal,
           cashReceived: cashReceived,
           change: change,
+          autoPrint: autoPrint,
         ),
       ),
     );
@@ -126,19 +135,19 @@ class _ShopPageState extends State<ShopPage> {
         return StatefulBuilder(builder: (context, setStateDialog) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text("รับเงินสด", textAlign: TextAlign.center),
+            title: Text(tr('receive_cash'), textAlign: TextAlign.center),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("ยอดชำระ: ${currencyFormat.format(totalAmount)} LAK", style: TextStyle(fontSize: 18, color: darkBlue, fontWeight: FontWeight.bold)),
+                Text("${tr('payment_amount')}: ${currencyFormat.format(totalAmount)} LAK", style: TextStyle(fontSize: 18, color: darkBlue, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 TextField(
                   controller: cashController,
                   keyboardType: TextInputType.number,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: "จำนวนเงินที่รับมา",
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: tr('received_amount'),
+                    border: const OutlineInputBorder(),
                     suffixText: "LAK",
                   ),
                   onChanged: (value) {
@@ -150,23 +159,23 @@ class _ShopPageState extends State<ShopPage> {
                 ),
                 const SizedBox(height: 20),
                 if (change >= 0)
-                  Text("เงินทอน: ${currencyFormat.format(change)} LAK", style: const TextStyle(fontSize: 20, color: Colors.green, fontWeight: FontWeight.bold))
+                  Text("${tr('change')}: ${currencyFormat.format(change)} LAK", style: const TextStyle(fontSize: 20, color: Colors.green, fontWeight: FontWeight.bold))
                 else
-                  Text("ขาดอีก: ${currencyFormat.format(change.abs())} LAK", style: const TextStyle(fontSize: 16, color: Colors.red)),
+                  Text("${tr('missing_amount')}: ${currencyFormat.format(change.abs())} LAK", style: const TextStyle(fontSize: 16, color: Colors.red)),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
               ElevatedButton(
                 onPressed: (change >= 0 && cashController.text.isNotEmpty)
                     ? () {
                         Navigator.pop(context);
                         double received = double.tryParse(cashController.text) ?? 0;
-                        _goToReceipt(cashReceived: received, change: change);
+                        _goToReceipt(cashReceived: received, change: change, autoPrint: true);
                       }
                     : null,
                 style: ElevatedButton.styleFrom(backgroundColor: darkBlue),
-                child: const Text("ยืนยันการชำระ", style: TextStyle(color: Colors.white)),
+                child: Text(tr('confirm_payment'), style: const TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -183,7 +192,7 @@ class _ShopPageState extends State<ShopPage> {
         timer.cancel();
         if (mounted) {
           Navigator.pop(context);
-          _goToReceipt();
+          _goToReceipt(autoPrint: true);
         }
       }
     });
@@ -217,15 +226,15 @@ class _ShopPageState extends State<ShopPage> {
                 ),
                 
                 const SizedBox(height: 16),
-                const Text("รับชำระ / Support QR", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 8),
                 // Bank Logos
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildBankIcon(Colors.red, "One"),
-                    _buildBankIcon(Colors.blue, "BFL"),
-                    _buildBankIcon(Colors.green, "JDB"),
+                    Image.network(
+                      'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/icon%2FmessageImage_1763726393248.jpg?alt=media',
+                      height: 40,
+                      fit: BoxFit.contain,
+                    ),
                   ],
                 ),
 
@@ -240,15 +249,15 @@ class _ShopPageState extends State<ShopPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("ยอดชำระรวม", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                        Text(tr('total_payment'), style: const TextStyle(color: Colors.grey, fontSize: 14)),
                         Text("${currencyFormat.format(amount)} LAK", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text("จำนวนรายการ", style: TextStyle(color: Colors.grey, fontSize: 14)),
-                        Text("$itemCount รายการ", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
+                        Text(tr('total_items'), style: const TextStyle(color: Colors.grey, fontSize: 14)),
+                        Text("$itemCount ${tr('items')}", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ],
@@ -269,7 +278,7 @@ class _ShopPageState extends State<ShopPage> {
                       side: BorderSide(color: darkBlue),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text("ยกเลิก / ปิด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text(tr('cancel_close'), style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 )
               ],
@@ -280,18 +289,7 @@ class _ShopPageState extends State<ShopPage> {
     );
   }
 
-  Widget _buildBankIcon(Color color, String text) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +300,7 @@ class _ShopPageState extends State<ShopPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: darkBlue),
         centerTitle: true,
-        title: Text("ร้านขายของ", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+        title: Text(tr('shop_title'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(Icons.edit_note, color: darkBlue),
@@ -320,7 +318,7 @@ class _ShopPageState extends State<ShopPage> {
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
               decoration: InputDecoration(
-                hintText: "ค้นหาชื่อสินค้า หรือ บาร์โค้ด",
+                hintText: tr('search_product'),
                 prefixIcon: Icon(Icons.search, color: darkBlue),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 focusedBorder: OutlineInputBorder(
@@ -342,7 +340,7 @@ class _ShopPageState extends State<ShopPage> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+                if (snapshot.hasError) return Center(child: Text('${tr('error')}: ${snapshot.error}'));
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                 
                 final allDocs = snapshot.data!.docs;
@@ -356,7 +354,7 @@ class _ShopPageState extends State<ShopPage> {
                       }).toList();
 
                 if (filteredDocs.isEmpty) {
-                  return const Center(child: Text('ไม่พบสินค้า'));
+                  return Center(child: Text(tr('product_not_found')));
                 }
 
                 return GridView.builder(
@@ -403,7 +401,7 @@ class _ShopPageState extends State<ShopPage> {
                               children: [
                                 Text(data['name'], style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 if (data['barcode'] != null && data['barcode'] != "")
-                                  Text("Code: ${data['barcode']}", style: TextStyle(fontSize: 10, color: Colors.grey)),
+                                  Text("${tr('code')}: ${data['barcode']}", style: const TextStyle(fontSize: 10, color: Colors.grey)),
                                 const SizedBox(height: 4),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -462,17 +460,7 @@ class _ShopPageState extends State<ShopPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: () {},
-                      style: OutlinedButton.styleFrom(side: BorderSide(color: darkBlue, width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), backgroundColor: Colors.white),
-                      child: Text("บันทึก", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text("Total: ${currencyFormat.format(_calculateTotal())} LAK", style: TextStyle(color: darkBlue, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text("${tr('total')}: ${currencyFormat.format(_calculateTotal())} LAK", style: TextStyle(color: darkBlue, fontSize: 18, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
@@ -481,10 +469,10 @@ class _ShopPageState extends State<ShopPage> {
                       onPressed: () {
                         double total = _calculateTotal();
                         if (total > 0) _showCashDialog(total);
-                        else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("กรุณาเลือกรายการ")));
+                        else ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('please_select_item'))));
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: lightBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                      child: Text("เงินสด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(tr('cash'), style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -495,7 +483,7 @@ class _ShopPageState extends State<ShopPage> {
                       onPressed: () async {
                         double subtotal = _calculateTotal();
                         if (subtotal <= 0) {
-                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("กรุณาเลือกรายการสินค้าก่อน")));
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('please_select_item'))));
                           return;
                         }
                         showDialog(context: context, barrierDismissible: false, builder: (c) => const Center(child: CircularProgressIndicator()));
@@ -503,10 +491,10 @@ class _ShopPageState extends State<ShopPage> {
                         String? qrCode = await OnepayService.generateQR(amount: subtotal, orderId: orderId, description: "Shop Order");
                         Navigator.pop(context);
                         if (qrCode != null) _showQRCodeDialog(qrCode, subtotal, _calculateTotalItems(), orderId);
-                        else ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("ไม่สามารถสร้าง QR Code ได้")));
+                        else ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('cannot_create_qr'))));
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: darkBlue, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), elevation: 0),
-                      child: const Text("สร้าง QR Code", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(tr('create_qr'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

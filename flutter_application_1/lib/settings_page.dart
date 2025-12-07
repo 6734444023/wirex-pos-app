@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -22,6 +25,11 @@ class _SettingsPageState extends State<SettingsPage> {
   bool _isLoading = true;
 
   final user = FirebaseAuth.instance.currentUser;
+
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
 
   @override
   void initState() {
@@ -70,13 +78,13 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('บันทึกการตั้งค่า (POS) แล้ว'), backgroundColor: darkBlue),
+          SnackBar(content: Text(tr('settings_saved')), backgroundColor: darkBlue),
         );
       }
     } catch (e) {
       print("Error saving: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('เกิดข้อผิดพลาด'), backgroundColor: Colors.red),
+        SnackBar(content: Text(tr('error')), backgroundColor: Colors.red),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -103,7 +111,7 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: darkBlue),
         title: Text(
-          'ตั้งค่าร้านค้า (POS)',
+          tr('store_settings'),
           style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold),
         ),
       ),
@@ -114,23 +122,23 @@ class _SettingsPageState extends State<SettingsPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildSectionCard(
-                title: 'ข้อมูลร้านค้า',
+                title: tr('store_info'),
                 child: Column(
                   children: [
                     _buildLabeledField(
-                      label: 'ชื่อร้าน',
+                      label: tr('store_name'),
                       child: TextField(
                         controller: _storeNameController,
-                        decoration: const InputDecoration(hintText: 'เช่น WireX Café'),
+                        decoration: InputDecoration(hintText: tr('example_store_name')),
                       ),
                     ),
                     const SizedBox(height: 16),
                     _buildLabeledField(
-                      label: 'เบอร์โทรร้าน',
+                      label: tr('store_phone'),
                       child: TextField(
                         controller: _phoneController,
                         keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(hintText: 'เช่น 020-123-4567'),
+                        decoration: InputDecoration(hintText: tr('example_phone')),
                       ),
                     ),
                   ],
@@ -138,11 +146,11 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: 20),
               _buildSectionCard(
-                title: 'การตั้งค่า VAT',
+                title: tr('vat_settings'),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('อัตรา VAT (%)', style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+                    Text(tr('vat_rate'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<int>(
                       value: _selectedVat,
@@ -154,13 +162,13 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
-                    Text('รูปแบบ VAT', style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+                    Text(tr('vat_mode'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        _buildVatToggle('VAT ใน (รวมในราคา)', 'in'),
+                        _buildVatToggle(tr('vat_included'), 'in'),
                         const SizedBox(width: 10),
-                        _buildVatToggle('VAT นอก (บวกเพิ่ม)', 'out'),
+                        _buildVatToggle(tr('vat_excluded'), 'out'),
                       ],
                     ),
                   ],
@@ -175,7 +183,7 @@ class _SettingsPageState extends State<SettingsPage> {
                     backgroundColor: darkBlue,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   ),
-                  child: const Text('บันทึกการตั้งค่า', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(tr('save_settings'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             ],

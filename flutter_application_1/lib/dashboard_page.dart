@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'app_drawer.dart'; // ✅ Import AppDrawer ที่จะสร้างขึ้นมา
 import 'restaurant_menu_page.dart';
 import 'shop_page.dart';
 import 'gas_station_page.dart';
 import 'manual_payment_page.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class DashboardPage extends StatelessWidget {
   const DashboardPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context).selectedLanguage;
+    String tr(String key) => AppTranslations.get(lang, key);
+
     const Color darkBlue = Color(0xFF1E2444);
     const Color lightBlue = Color(0xFFE2E6FF); // สีฟ้าอ่อนสำหรับปุ่ม 'ชำระโดยไม่เลือกเมนู'
 
@@ -17,9 +23,9 @@ class DashboardPage extends StatelessWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         // เปลี่ยน title เป็น "เลือกประเภท" ตามรูป
-        title: const Text(
-          'เลือกประเภท',
-          style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold),
+        title: Text(
+          tr('select_category'),
+          style: const TextStyle(color: darkBlue, fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
         elevation: 0, // ไม่มีเงา
@@ -42,7 +48,7 @@ class DashboardPage extends StatelessWidget {
                     _buildCategoryButton(
                       context,
                       icon: Icons.restaurant,
-                      label: 'ร้านอาหาร',
+                      label: tr('restaurant'),
                       color: darkBlue,
                       onTap: () {
                         print('ร้านอาหาร tapped');
@@ -58,7 +64,7 @@ class DashboardPage extends StatelessWidget {
                     _buildCategoryButton(
                       context,
                       icon: Icons.store,
-                      label: 'ร้านขายของ',
+                      label: tr('shop'),
                       color: darkBlue,
                       onTap: () {
                         print('ร้านขายของ tapped');
@@ -74,7 +80,7 @@ class DashboardPage extends StatelessWidget {
                     _buildCategoryButton(
                       context,
                       icon: Icons.local_gas_station,
-                      label: 'ปั๊มน้ำมัน',
+                      label: tr('gas_station'),
                       color: darkBlue,
                       onTap: () {
                         print('ปั๊มน้ำมัน tapped');
@@ -90,7 +96,7 @@ class DashboardPage extends StatelessWidget {
                     _buildCategoryButton(
                       context,
                       icon: Icons.qr_code_2,
-                      label: 'ชำระโดยไม่เลือกเมนู',
+                      label: tr('manual_payment'),
                       color: lightBlue, // สีฟ้าอ่อน
                       iconColor: darkBlue, // สีไอคอน
                       labelColor: darkBlue, // สีตัวหนังสือ
@@ -118,18 +124,22 @@ class DashboardPage extends StatelessWidget {
                         height: 40,
                         decoration: BoxDecoration(
                           color: darkBlue,
-                          borderRadius: BorderRadius.circular(8),
+                          borderRadius: BorderRadius.zero,
+                          image: const DecorationImage(
+                            image: NetworkImage(
+                              'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/logo%2FmessageImage_1763726179957.jpg?alt=media',
+                            ),
+                            fit: BoxFit.cover,
+                          ),
                         ),
-                        child: const Icon(Icons.qr_code, color: Colors.white, size: 20),
                       ),
                       const SizedBox(width: 8),
                       const Text(
-                        "WireX Portable POS",
+                        "WireX Smart POS",
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: darkBlue,
-                          fontFamily: 'Serif',
                         ),
                       ),
                     ],

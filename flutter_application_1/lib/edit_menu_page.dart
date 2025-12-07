@@ -4,6 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart'; // สำหรับอัปโหลดรูป
 import 'package:image_picker/image_picker.dart'; // สำหรับเลือกรูป
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class EditMenuPage extends StatefulWidget {
   const EditMenuPage({super.key});
@@ -20,6 +23,11 @@ class _EditMenuPageState extends State<EditMenuPage> {
   File? _selectedImage;
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
+
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
 
   // ฟังก์ชันเลือกรูป
   Future<void> _pickImage(StateSetter setStateDialog) async {
@@ -58,7 +66,7 @@ class _EditMenuPageState extends State<EditMenuPage> {
       builder: (context) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            title: const Text("เพิ่มเมนูใหม่"),
+            title: Text(tr('add_new_menu')),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -84,7 +92,7 @@ class _EditMenuPageState extends State<EditMenuPage> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(Icons.camera_alt, color: Colors.grey[600], size: 40),
-                              Text("แตะเพื่อเลือกรูป", style: TextStyle(color: Colors.grey[600])),
+                              Text(tr('tap_to_pick_image'), style: TextStyle(color: Colors.grey[600])),
                             ],
                           )
                         : null,
@@ -93,19 +101,19 @@ class _EditMenuPageState extends State<EditMenuPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: nameController,
-                  decoration: const InputDecoration(labelText: "ชื่อเมนู"),
+                  decoration: InputDecoration(labelText: tr('menu_name')),
                 ),
                 TextField(
                   controller: priceController,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: "ราคา (LAK)"),
+                  decoration: InputDecoration(labelText: tr('price_lak')),
                 ),
               ],
             ),
             actions: [
               TextButton(
                 onPressed: _isUploading ? null : () => Navigator.pop(context),
-                child: const Text("ยกเลิก"),
+                child: Text(tr('cancel')),
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: darkBlue),
@@ -146,7 +154,7 @@ class _EditMenuPageState extends State<EditMenuPage> {
                     ? const SizedBox(
                         width: 20, height: 20, 
                         child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text("บันทึก", style: TextStyle(color: Colors.white)),
+                    : Text(tr('save'), style: const TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -177,7 +185,7 @@ class _EditMenuPageState extends State<EditMenuPage> {
         iconTheme: IconThemeData(color: darkBlue),
         centerTitle: true,
         title: Text(
-          "แก้ไขเมนู",
+          tr('edit_menu'),
           style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold),
         ),
       ),
@@ -218,7 +226,7 @@ class _EditMenuPageState extends State<EditMenuPage> {
                       children: [
                         Icon(Icons.add, size: 40, color: darkBlue),
                         const SizedBox(height: 8),
-                        Text("เพิ่มเมนู", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+                        Text(tr('add_menu'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ),
@@ -257,7 +265,7 @@ class _EditMenuPageState extends State<EditMenuPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                data['name'] ?? 'No Name',
+                                data['name'] ?? tr('no_name'),
                                 style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                 maxLines: 1, overflow: TextOverflow.ellipsis,
                               ),

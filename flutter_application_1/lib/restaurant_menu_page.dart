@@ -2,12 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:intl/intl.dart';
 import 'edit_menu_page.dart';
 import 'services/onepay_service.dart';
 import 'services/transaction_service.dart';
 import 'receipt_page.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class RestaurantMenuPage extends StatefulWidget {
   const RestaurantMenuPage({super.key});
@@ -27,6 +30,11 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
   final NumberFormat currencyFormat = NumberFormat("#,##0", "en_US");
   
   Timer? _pollTimer;
+
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
 
   @override
   void dispose() {
@@ -72,7 +80,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
   }
 
   // 🔥 ฟังก์ชันไปหน้าใบเสร็จ (Clear ตะกร้า และ Navigate)
-  void _goToReceipt({double cashReceived = 0, double change = 0}) {
+  void _goToReceipt({double cashReceived = 0, double change = 0, bool autoPrint = false}) {
     // เตรียมข้อมูลสินค้าสำหรับส่งไปหน้าใบเสร็จ
     List<Map<String, dynamic>> orderItems = [];
     cart.forEach((docId, quantity) {
@@ -97,6 +105,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
       paymentMethod: cashReceived > 0 ? 'cash' : 'qr',
       cashReceived: cashReceived > 0 ? cashReceived : finalTotal,
       change: change,
+  
     );
 
     // เคลียร์ข้อมูลในหน้านี้
@@ -114,6 +123,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
           totalAmount: finalTotal,
           cashReceived: cashReceived,
           change: change,
+          autoPrint: autoPrint,
         ),
       ),
     );
@@ -130,19 +140,19 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
         return StatefulBuilder(builder: (context, setStateDialog) {
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: const Text("รับเงินสด", textAlign: TextAlign.center),
+            title: Text(tr('receive_cash'), textAlign: TextAlign.center),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text("ยอดชำระ: ${currencyFormat.format(totalAmount)} LAK", style: TextStyle(fontSize: 18, color: darkBlue, fontWeight: FontWeight.bold)),
+                Text("${tr('payment_amount')}: ${currencyFormat.format(totalAmount)} LAK", style: TextStyle(fontSize: 18, color: darkBlue, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 20),
                 TextField(
                   controller: cashController,
                   keyboardType: TextInputType.number,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: "จำนวนเงินที่รับมา",
-                    border: OutlineInputBorder(),
+                  decoration: InputDecoration(
+                    labelText: tr('received_amount'),
+                    border: const OutlineInputBorder(),
                     suffixText: "LAK",
                   ),
                   onChanged: (value) {
@@ -154,24 +164,24 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                 ),
                 const SizedBox(height: 20),
                 if (change >= 0)
-                  Text("เงินทอน: ${currencyFormat.format(change)} LAK", style: const TextStyle(fontSize: 20, color: Colors.green, fontWeight: FontWeight.bold))
+                  Text("${tr('change')}: ${currencyFormat.format(change)} LAK", style: const TextStyle(fontSize: 20, color: Colors.green, fontWeight: FontWeight.bold))
                 else
-                  Text("ขาดอีก: ${currencyFormat.format(change.abs())} LAK", style: const TextStyle(fontSize: 16, color: Colors.red)),
+                  Text("${tr('missing_amount')}: ${currencyFormat.format(change.abs())} LAK", style: const TextStyle(fontSize: 16, color: Colors.red)),
               ],
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
               ElevatedButton(
                 onPressed: (change >= 0 && cashController.text.isNotEmpty)
                     ? () {
                         Navigator.pop(context); // ปิด Dialog
                         // ไปหน้าใบเสร็จ
                         double received = double.tryParse(cashController.text) ?? 0;
-                        _goToReceipt(cashReceived: received, change: change);
+                        _goToReceipt(cashReceived: received, change: change, autoPrint: true);
                       }
                     : null,
                 style: ElevatedButton.styleFrom(backgroundColor: darkBlue),
-                child: const Text("ยืนยันการชำระ", style: TextStyle(color: Colors.white)),
+                child: Text(tr('confirm_payment'), style: const TextStyle(color: Colors.white)),
               ),
             ],
           );
@@ -190,7 +200,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
         timer.cancel();
         if (mounted) {
           Navigator.pop(context); // ปิด Dialog QR
-          _goToReceipt(); // ไปหน้าใบเสร็จ (จ่าย QR ไม่ต้องทอนเงิน)
+          _goToReceipt(autoPrint: true); // ไปหน้าใบเสร็จ (จ่าย QR ไม่ต้องทอนเงิน)
         }
       }
     });
@@ -224,15 +234,15 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                 ),
                 
                 const SizedBox(height: 16),
-                const Text("รับชำระ / Support QR", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 8),
                 // Bank Logos (Placeholder)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _buildBankIcon(Colors.red, "One"),
-                    _buildBankIcon(Colors.blue, "BFL"),
-                    _buildBankIcon(Colors.green, "JDB"),
+                    Image.network(
+                      'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/icon%2FmessageImage_1763726393248.jpg?alt=media',
+                      height: 40,
+                      fit: BoxFit.contain,
+                    ),
                   ],
                 ),
 
@@ -247,15 +257,15 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text("ยอดชำระรวม", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                        Text(tr('total_payment'), style: const TextStyle(color: Colors.grey, fontSize: 14)),
                         Text("${currencyFormat.format(amount)} LAK", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
                       ],
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text("จำนวนรายการ", style: TextStyle(color: Colors.grey, fontSize: 14)),
-                        Text("$itemCount รายการ", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
+                        Text(tr('total_items'), style: const TextStyle(color: Colors.grey, fontSize: 14)),
+                        Text("$itemCount ${tr('items')}", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
                       ],
                     ),
                   ],
@@ -276,7 +286,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                       side: BorderSide(color: darkBlue),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    child: Text("ยกเลิก / ปิด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text(tr('cancel_close'), style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 )
               ],
@@ -287,18 +297,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
     );
   }
 
-  Widget _buildBankIcon(Color color, String text) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
-    );
-  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -309,7 +308,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: darkBlue),
         centerTitle: true,
-        title: Text("เลือกเมนู", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+        title: Text(tr('select_menu'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
             icon: Icon(Icons.edit_note, color: darkBlue),
@@ -328,7 +327,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
             child: TextField(
               onChanged: (value) => setState(() => _searchQuery = value.trim().toLowerCase()),
               decoration: InputDecoration(
-                hintText: "ค้นหาชื่อเมนู",
+                hintText: tr('search_menu'),
                 prefixIcon: Icon(Icons.search, color: darkBlue),
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                 focusedBorder: OutlineInputBorder(
@@ -349,7 +348,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
-                if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
+                if (snapshot.hasError) return Center(child: Text('${tr('error')}: ${snapshot.error}'));
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
                 
                 final allDocs = snapshot.data!.docs;
@@ -362,7 +361,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                       }).toList();
 
                 if (filteredDocs.isEmpty) {
-                  return const Center(child: Text('ไม่พบเมนูที่ค้นหา'));
+                  return Center(child: Text(tr('menu_not_found')));
                 }
 
                 return GridView.builder(
@@ -473,26 +472,8 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SizedBox(
-                    width: double.infinity,
-                    height: 50,
-                    child: OutlinedButton(
-                      onPressed: () {
-                        // TODO: บันทึกออเดอร์
-                      },
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: darkBlue, width: 1.5),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        backgroundColor: Colors.white,
-                      ),
-                      child: Text("บันทึก", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 12),
-
                   Text(
-                    "Total: ${currencyFormat.format(_calculateTotal())} LAK", 
+                    "${tr('total')}: ${currencyFormat.format(_calculateTotal())} LAK", 
                     style: TextStyle(color: darkBlue, fontSize: 18, fontWeight: FontWeight.bold),
                   ),
 
@@ -508,7 +489,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                         if (total > 0) {
                            _showCashDialog(total);
                         } else {
-                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("กรุณาเลือกรายการ")));
+                           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(tr('please_select_item'))));
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -516,7 +497,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      child: Text("เงินสด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(tr('cash'), style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
 
@@ -531,7 +512,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                         double subtotal = _calculateTotal();
                         if (subtotal <= 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("กรุณาเลือกรายการอาหารก่อน")),
+                            SnackBar(content: Text(tr('please_select_item'))),
                           );
                           return;
                         }
@@ -555,7 +536,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                            _showQRCodeDialog(qrCode, subtotal, _calculateTotalItems(), orderId);
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text("ไม่สามารถสร้าง QR Code ได้")),
+                            SnackBar(content: Text(tr('cannot_create_qr'))),
                           );
                         }
                       },
@@ -564,7 +545,7 @@ class _RestaurantMenuPageState extends State<RestaurantMenuPage> {
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         elevation: 0,
                       ),
-                      child: const Text("สร้าง QR Code", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      child: Text(tr('create_qr'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
                     ),
                   ),
                 ],

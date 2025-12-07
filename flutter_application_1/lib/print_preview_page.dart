@@ -4,6 +4,9 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class PrintPreviewPage extends StatelessWidget {
   final int copies;
@@ -27,15 +30,17 @@ class PrintPreviewPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final language = Provider.of<LanguageProvider>(context).selectedLanguage;
+    
     return Scaffold(
       appBar: AppBar(
-        title: const Text("ตัวอย่างใบเสร็จ"),
+        title: Text(AppTranslations.get(language, 'receipt_preview')),
         backgroundColor: const Color(0xFF1E2444),
         foregroundColor: Colors.white,
       ),
       body: PdfPreview(
         // ฟังก์ชันสร้าง PDF
-        build: (format) => _generatePdf(format),
+        build: (format) => _generatePdf(format, language),
         // ตั้งค่ากระดาษเริ่มต้นเป็นแบบใบเสร็จ (Roll 80mm)
         initialPageFormat: PdfPageFormat.roll80, 
         canChangePageFormat: false, // ห้ามเปลี่ยนขนาดกระดาษ
@@ -44,10 +49,12 @@ class PrintPreviewPage extends StatelessWidget {
     );
   }
 
-  Future<Uint8List> _generatePdf(PdfPageFormat format) async {
+  Future<Uint8List> _generatePdf(PdfPageFormat format, String language) async {
     final doc = pw.Document();
     final currencyFormat = NumberFormat("#,##0", "en_US");
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
+
+    String tr(String key) => AppTranslations.get(language, key);
 
     // 1. โหลดฟอนต์ภาษาไทย (จำเป็นมาก ไม่งั้นจะเป็นสี่เหลี่ยม)
     // ใช้ Sarabun จาก Google Fonts เพราะอ่านง่ายและรองรับไทยครบ
@@ -70,13 +77,13 @@ class PrintPreviewPage extends StatelessWidget {
                 ),
                 pw.SizedBox(height: 5),
                 pw.Center(
-                  child: pw.Text("ใบเสร็จรับเงิน / RECEIPT", style: pw.TextStyle(font: font, fontSize: 12)),
+                  child: pw.Text(tr('receipt_header'), style: pw.TextStyle(font: font, fontSize: 12)),
                 ),
                 pw.Divider(),
                 
                 // --- Order Info ---
-                pw.Text("เลขที่บิล: ${orderData['orderId'] ?? '-'}", style: pw.TextStyle(font: font, fontSize: 10)),
-                pw.Text("วันที่: ${dateFormat.format(DateTime.now())}", style: pw.TextStyle(font: font, fontSize: 10)),
+                pw.Text("${tr('bill_no')}: ${orderData['orderId'] ?? '-'}", style: pw.TextStyle(font: font, fontSize: 10)),
+                pw.Text("${tr('date')}: ${dateFormat.format(DateTime.now())}", style: pw.TextStyle(font: font, fontSize: 10)),
                 pw.Divider(),
 
                 // --- Items ---
@@ -100,15 +107,15 @@ class PrintPreviewPage extends StatelessWidget {
                 pw.Divider(),
 
                 // --- Totals ---
-                _buildPdfRow("ยอดรวม", "${currencyFormat.format(totalAmount)} LAK", fontBold),
+                _buildPdfRow(tr('total'), "${currencyFormat.format(totalAmount)} LAK", fontBold),
                 
                 if (cashReceived > 0) ...[
                    pw.SizedBox(height: 2),
-                  _buildPdfRow("รับเงิน", "${currencyFormat.format(cashReceived)} LAK", font),
-                  _buildPdfRow("เงินทอน", "${currencyFormat.format(change)} LAK", font),
+                  _buildPdfRow(tr('receive_cash'), "${currencyFormat.format(cashReceived)} LAK", font),
+                  _buildPdfRow(tr('change'), "${currencyFormat.format(change)} LAK", font),
                 ] else ...[
                    pw.SizedBox(height: 2),
-                  _buildPdfRow("ชำระโดย", "QR Code", font),
+                  _buildPdfRow(tr('paid_by'), "QR Code", font),
                 ],
 
                 pw.SizedBox(height: 10),
@@ -117,15 +124,15 @@ class PrintPreviewPage extends StatelessWidget {
                 
                 // --- Footer ---
                 pw.Center(
-                  child: pw.Text("ขอบคุณที่ใช้บริการ", style: pw.TextStyle(font: font, fontSize: 10)),
+                  child: pw.Text(tr('thank_you'), style: pw.TextStyle(font: font, fontSize: 10)),
                 ),
                 pw.Center(
-                  child: pw.Text("WireX Portable POS", style: pw.TextStyle(font: fontBold, fontSize: 12)),
+                  child: pw.Text(tr('wirex_pos'), style: pw.TextStyle(font: fontBold, fontSize: 12)),
                 ),
                 // ถ้าเป็นสำเนาให้บอกด้วย
                 if (i > 0) 
                   pw.Center(
-                    child: pw.Text("*** สำเนา (${i+1}) ***", style: pw.TextStyle(font: font, fontSize: 8)),
+                    child: pw.Text("*** ${tr('copy')} (${i+1}) ***", style: pw.TextStyle(font: font, fontSize: 8)),
                   ),
               ],
             );

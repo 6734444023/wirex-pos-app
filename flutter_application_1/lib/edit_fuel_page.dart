@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class EditFuelPage extends StatefulWidget {
   const EditFuelPage({super.key});
@@ -13,6 +16,11 @@ class _EditFuelPageState extends State<EditFuelPage> {
   final Color darkBlue = const Color(0xFF1E2444);
   final user = FirebaseAuth.instance.currentUser;
 
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
+
   void _showAddFuelDialog() {
     final nameController = TextEditingController();
     final priceController = TextEditingController();
@@ -20,23 +28,23 @@ class _EditFuelPageState extends State<EditFuelPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("เพิ่มประเภทน้ำมัน"),
+        title: Text(tr('add_fuel_type_title')),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: "ชื่อน้ำมัน (เช่น เบนซิน 95)"),
+              decoration: InputDecoration(labelText: tr('fuel_name_hint')),
             ),
             TextField(
               controller: priceController,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: "ราคาต่อลิตร (LAK)"),
+              decoration: InputDecoration(labelText: tr('price_per_liter')),
             ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("ยกเลิก")),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: darkBlue),
             onPressed: () async {
@@ -54,7 +62,7 @@ class _EditFuelPageState extends State<EditFuelPage> {
                 if (mounted) Navigator.pop(context);
               }
             },
-            child: const Text("บันทึก", style: TextStyle(color: Colors.white)),
+            child: Text(tr('save'), style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -72,7 +80,7 @@ class _EditFuelPageState extends State<EditFuelPage> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: Text("จัดการราคาน้ำมัน", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+        title: Text(tr('manage_fuel_prices'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.white,
         elevation: 0,
         iconTheme: IconThemeData(color: darkBlue),
@@ -110,7 +118,7 @@ class _EditFuelPageState extends State<EditFuelPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(data['name'], style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: darkBlue)),
-                        Text("${data['pricePerLiter']} LAK / ลิตร", style: const TextStyle(color: Colors.grey)),
+                        Text("${data['pricePerLiter']} LAK / ${tr('liters')}", style: const TextStyle(color: Colors.grey)),
                       ],
                     ),
                     IconButton(

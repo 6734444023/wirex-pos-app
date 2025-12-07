@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:provider/provider.dart';
 import 'login_page.dart'; // สำหรับกลับไปหน้า Login เมื่อ Logout
 import 'settings_page.dart';
 import 'transaction_history_page.dart';
+import 'reports_page.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
@@ -21,6 +25,8 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final lang = Provider.of<LanguageProvider>(context).selectedLanguage;
+    String tr(String key) => AppTranslations.get(lang, key);
     const Color darkBlue = Color(0xFF1E2444);
 
     return Drawer(
@@ -43,21 +49,25 @@ class AppDrawer extends StatelessWidget {
   height: 60,
   decoration: BoxDecoration(
     color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.zero,
+    image: const DecorationImage(
+      image: NetworkImage(
+        'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/logo%2FmessageImage_1763726179957.jpg?alt=media',
+      ),
+      fit: BoxFit.cover,
+    ),
   ),
-  child: const Icon(Icons.qr_code, color: darkBlue, size: 30),
 ),
 const SizedBox(width: 16),
 
 // 🔥 แก้ตรงนี้: เอา Expanded มาครอบ Text ไว้ครับ
 Expanded( 
   child: Text(
-    "WireX Portable POS",
-    style: TextStyle(
+    tr('wirex_pos'),
+    style: const TextStyle(
       fontSize: 20,
       fontWeight: FontWeight.bold,
       color: Colors.white,
-      fontFamily: 'Serif',
     ),
     overflow: TextOverflow.ellipsis, // เพิ่มบรรทัดนี้: ถ้าล้นให้แสดง ... แทน
     // หรือถ้าอยากให้ขึ้นบรรทัดใหม่ ให้ลบ overflow ออก แล้วใส่ maxLines: 2 แทน
@@ -71,24 +81,27 @@ Expanded(
             ),
             
             // รายการเมนู
-            _buildDrawerItem(context, Icons.home, 'หน้าหลัก', () {
+            _buildDrawerItem(context, Icons.home, tr('home'), () {
               Navigator.pop(context); // ปิด Drawer
               // TODO: ถ้าอยู่หน้า Dashboard อยู่แล้ว ก็ไม่ต้องทำอะไร
             }),
-            _buildDrawerItem(context, Icons.history, 'ประวัติธุรกรรม', () {
+            _buildDrawerItem(context, Icons.history, tr('transaction_history'), () {
               Navigator.pop(context);
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => const TransactionHistoryPage()),
               );
             }),
-            _buildDrawerItem(context, Icons.analytics, 'รายงาน', () {
+            _buildDrawerItem(context, Icons.analytics, tr('reports'), () {
               print('ไปหน้ารายงาน');
               Navigator.pop(context);
-              // TODO: Navigate ไปหน้ารายงาน
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const ReportsPage()),
+              );
             }),
        
-            _buildDrawerItem(context, Icons.settings, 'ตั้งค่า', () {
+            _buildDrawerItem(context, Icons.settings, tr('settings'), () {
               Navigator.pop(context);
               Navigator.push(
                 context,
@@ -107,9 +120,9 @@ Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () => _signOut(context),
                   icon: const Icon(Icons.logout, color: darkBlue),
-                  label: const Text(
-                    'ออกจากระบบ',
-                    style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold),
+                  label: Text(
+                    tr('logout'),
+                    style: const TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white, // ปุ่มสีขาว

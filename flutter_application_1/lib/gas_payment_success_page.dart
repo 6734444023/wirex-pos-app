@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'print_preview_page.dart'; // ใช้สำหรับพิมพ์ใบเสร็จ
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
+import 'services/sunmi_service.dart';
 
-class GasPaymentSuccessPage extends StatelessWidget {
+class GasPaymentSuccessPage extends StatefulWidget {
   final double totalAmount;
   final String fuelName;
   final double liters;
   final double pricePerLiter;
   final String storeName;
+  final bool autoPrint;
 
   const GasPaymentSuccessPage({
     super.key,
@@ -16,7 +20,51 @@ class GasPaymentSuccessPage extends StatelessWidget {
     required this.liters,
     required this.pricePerLiter,
     required this.storeName,
+    this.autoPrint = false,
   });
+
+  @override
+  State<GasPaymentSuccessPage> createState() => _GasPaymentSuccessPageState();
+}
+
+class _GasPaymentSuccessPageState extends State<GasPaymentSuccessPage> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoPrint) {
+      _printReceipt();
+    }
+  }
+
+  Future<void> _printReceipt() async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    await SunmiService.printReceipt(
+      storeName: widget.storeName,
+      orderId: "GAS-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}",
+      items: [
+        {
+          'name': "${widget.fuelName} (${widget.pricePerLiter.toStringAsFixed(0)}/L)",
+          'quantity': 1,
+          'price': widget.totalAmount,
+        },
+        {
+          'name': tr('liters_amount'),
+          'quantity': 0,
+          'price': widget.liters,
+        }
+      ],
+      totalAmount: widget.totalAmount,
+      cashReceived: widget.totalAmount,
+      change: 0,
+      paymentMethod: 'cash', // Assuming cash for now or passed from previous page if needed
+      language: languageProvider.selectedLanguage,
+    );
+  }
+
+  String tr(String key) {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    return AppTranslations.get(languageProvider.selectedLanguage, key);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,21 +85,26 @@ class GasPaymentSuccessPage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(6),
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.zero,
+                        image: const DecorationImage(
+                          image: NetworkImage(
+                            'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/logo%2FmessageImage_1763726179957.jpg?alt=media',
+                          ),
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                      child: const Icon(Icons.qr_code, color: darkBlue, size: 24),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
-                      "WireX Portable POS",
-                      style: TextStyle(
+                    Text(
+                      tr('wirex_pos'),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Serif',
                       ),
                     ),
                   ],
@@ -86,9 +139,9 @@ class GasPaymentSuccessPage extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                const Text(
-                  "ชำระเงินสำเร็จ",
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                Text(
+                  tr('payment_success'),
+                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
 
                 const SizedBox(height: 30),
@@ -103,7 +156,7 @@ class GasPaymentSuccessPage extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      "${currencyFormat.format(totalAmount)} LAK",
+                      "${currencyFormat.format(widget.totalAmount)} LAK",
                       style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ),
@@ -112,54 +165,11 @@ class GasPaymentSuccessPage extends StatelessWidget {
                 const SizedBox(height: 10),
                 // รายละเอียดเพิ่มเติมเล็กน้อย (Optional)
                 Text(
-                  "$fuelName: ${liters.toStringAsFixed(2)} ลิตร",
+                  "${widget.fuelName}: ${widget.liters.toStringAsFixed(2)} ${tr('liters')}",
                   style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14),
                 ),
 
                 const SizedBox(height: 50),
-
-                // Print Button
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      // ไปหน้า Print Preview
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PrintPreviewPage(
-                            copies: 1,
-                            storeName: storeName,
-                            orderData: {'orderId': "GAS-${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}"},
-                            items: [
-                              {
-                                'name': "$fuelName (${pricePerLiter.toStringAsFixed(0)}/L)",
-                                'quantity': 1, // นับเป็น 1 รายการ
-                                'price': totalAmount,
-                              },
-                              {
-                                'name': "จำนวนลิตร",
-                                'quantity': 0, // ไม่แสดง x
-                                'price': liters, // ใช้ช่อง price แสดงลิตรชั่วคราว (ต้องปรับ PrintPreview ถ้าอยากได้ format เป๊ะๆ)
-                              }
-                            ],
-                            totalAmount: totalAmount,
-                            cashReceived: totalAmount, // ถือว่าจ่ายพอดี
-                            change: 0,
-                          ),
-                        ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text("พิมพ์ใบเสร็จ", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
 
                 // Back Button
                 SizedBox(
@@ -171,7 +181,7 @@ class GasPaymentSuccessPage extends StatelessWidget {
                       backgroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text("กลับสู่เมนู", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text(tr('back_to_menu'), style: const TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],

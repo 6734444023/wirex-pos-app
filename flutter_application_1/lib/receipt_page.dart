@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // ✅ เพิ่ม
 import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ เพิ่ม
-import 'print_preview_page.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
+import 'services/sunmi_service.dart';
 
 class ReceiptPage extends StatefulWidget {
   final Map<String, dynamic> orderData;
@@ -10,6 +13,7 @@ class ReceiptPage extends StatefulWidget {
   final double totalAmount;
   final double cashReceived;
   final double change;
+  final bool autoPrint;
 
   const ReceiptPage({
     super.key,
@@ -18,6 +22,7 @@ class ReceiptPage extends StatefulWidget {
     required this.totalAmount,
     this.cashReceived = 0,
     this.change = 0,
+    this.autoPrint = false,
   });
 
   @override
@@ -46,6 +51,11 @@ class _ReceiptPageState extends State<ReceiptPage> {
               // ดึงค่า storeName_pos ที่ตั้งไว้ในหน้าตั้งค่า
               _storeName = data?['storeName_pos'] ?? "ร้านค้าของคุณ";
             });
+            
+            // ถ้า autoPrint เป็น true ให้สั่งพิมพ์ทันทีหลังจากได้ชื่อร้าน
+            if (widget.autoPrint) {
+              _printReceipt();
+            }
           }
         }
       } catch (e) {
@@ -54,10 +64,28 @@ class _ReceiptPageState extends State<ReceiptPage> {
     }
   }
 
+  Future<void> _printReceipt() async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    await SunmiService.printReceipt(
+      storeName: _storeName,
+      orderId: widget.orderData['orderId'] ?? '-',
+      items: widget.items,
+      totalAmount: widget.totalAmount,
+      cashReceived: widget.cashReceived,
+      change: widget.change,
+      paymentMethod: widget.cashReceived > 0 ? 'cash' : 'qr',
+      language: languageProvider.selectedLanguage,
+    );
+  }
+
+  String tr(String key) {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    return AppTranslations.get(languageProvider.selectedLanguage, key);
+  }
+
   @override
   Widget build(BuildContext context) {
     const Color darkBlue = Color(0xFF1E2444);
-    const Color lightBlue = Color(0xFFB3BCF5);
     final currencyFormat = NumberFormat("#,##0", "en_US");
 
     return Scaffold(
@@ -70,9 +98,9 @@ class _ReceiptPageState extends State<ReceiptPage> {
           onPressed: () => Navigator.pop(context),
         ),
         centerTitle: true,
-        title: const Text(
-          "ใบเสร็จ",
-          style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontSize: 20),
+        title: Text(
+          tr('receipt'),
+          style: const TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontSize: 20),
         ),
       ),
       body: Column(
@@ -98,9 +126,9 @@ class _ReceiptPageState extends State<ReceiptPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     // --- Header ---
-                    const Text(
-                      "ใบเสร็จรับเงิน / RECEIPT",
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    Text(
+                      tr('receipt_header'),
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 20),
                     
@@ -126,14 +154,14 @@ class _ReceiptPageState extends State<ReceiptPage> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               // ✅ แสดงชื่อร้านที่โหลดมา
-                              Text(_storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text(_storeName == "ร้านค้าของคุณ" ? tr('your_store') : _storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                               const SizedBox(height: 4),
                               Text(
-                                "วันที่: ${DateFormat('dd/MM/yyyy เวลา HH:mm').format(DateTime.now())}",
+                                "${tr('date')}: ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}",
                                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
                               ),
                               Text(
-                                "เลขที่บิล: ${widget.orderData['orderId'] ?? '-'}",
+                                "${tr('bill_no')}: ${widget.orderData['orderId'] ?? '-'}",
                                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
                               ),
                             ],
@@ -147,9 +175,9 @@ class _ReceiptPageState extends State<ReceiptPage> {
 
                     // --- Items List ---
                     if (widget.items.isEmpty)
-                       const Padding(
-                         padding: EdgeInsets.symmetric(vertical: 10),
-                         child: Text("- ไม่มีรายการสินค้า -"),
+                       Padding(
+                         padding: const EdgeInsets.symmetric(vertical: 10),
+                         child: Text("- ${tr('no_items')} -"),
                        ),
                     ...widget.items.map((item) => Padding(
                       padding: const EdgeInsets.only(bottom: 8.0),
@@ -180,23 +208,23 @@ class _ReceiptPageState extends State<ReceiptPage> {
                     const SizedBox(height: 10),
 
                     // --- Summary ---
-                    _buildSummaryRow("Total", "${currencyFormat.format(widget.totalAmount)} LAK"),
+                    _buildSummaryRow(tr('total'), "${currencyFormat.format(widget.totalAmount)} LAK"),
 
                     const SizedBox(height: 10),
                     
                     // ส่วนแสดงเงินสดและเงินทอน
                     if (widget.cashReceived > 0) ...[
                        const Divider(color: Colors.grey, thickness: 0.5, height: 20),
-                       _buildSummaryRow("รับเงินสด", "${currencyFormat.format(widget.cashReceived)} LAK"),
+                       _buildSummaryRow(tr('receive_cash'), "${currencyFormat.format(widget.cashReceived)} LAK"),
                        Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text("เงินทอน", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                          Text(tr('change'), style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
                           Text("${currencyFormat.format(widget.change)} LAK", style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
                         ],
                       ),
                     ] else ...[
-                       _buildSummaryRow("ชำระโดย", "QR Code"),
+                       _buildSummaryRow(tr('paid_by'), "QR Code"),
                     ],
                     
                     const SizedBox(height: 10),
@@ -206,7 +234,7 @@ class _ReceiptPageState extends State<ReceiptPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text("ยอดรวมสุทธิ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        Text(tr('net_total'), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                         Text(
                           "${currencyFormat.format(widget.totalAmount)} LAK",
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: Colors.black),
@@ -217,82 +245,34 @@ class _ReceiptPageState extends State<ReceiptPage> {
                     const SizedBox(height: 40),
 
                     // --- Footer ---
-                    const Text("ขอบคุณที่ใช้บริการ 🙏", style: TextStyle(fontWeight: FontWeight.bold)),
+                    Text("${tr('thank_you')} 🙏", style: const TextStyle(fontWeight: FontWeight.bold)),
                     const SizedBox(height: 5),
-                    const Text(
-                      "WireX Portable POS",
-                      style: TextStyle(color: Color(0xFF1E2444), fontSize: 20, fontWeight: FontWeight.bold, fontFamily: 'Serif'),
+                    Text(
+                      tr('wirex_pos'),
+                      style: const TextStyle(color: Color(0xFF1E2444), fontSize: 20, fontWeight: FontWeight.bold),
                     ),
-                    const Text("Call center: 02077222099", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text("${tr('call_center')}: 02077222099", style: const TextStyle(color: Colors.grey, fontSize: 12)),
                   ],
                 ),
               ),
             ),
           ),
 
-          // --- Print Buttons ---
+          // --- Close Button ---
           Container(
             padding: const EdgeInsets.all(20),
             color: Colors.white,
-            child: Column(
-              children: [
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PrintPreviewPage(
-                            copies: 2,
-                            storeName: _storeName,
-                            orderData: widget.orderData,
-                            items: widget.items,
-                            totalAmount: widget.totalAmount,
-                            cashReceived: widget.cashReceived,
-                            change: widget.change,
-                          ),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: darkBlue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text("พิมพ์ 2 ฉบับ", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E2444),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PrintPreviewPage(
-                            copies: 1,
-                            storeName: _storeName,
-                            orderData: widget.orderData,
-                            items: widget.items,
-                            totalAmount: widget.totalAmount,
-                            cashReceived: widget.cashReceived,
-                            change: widget.change,
-                          ),
-                        ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: lightBlue,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0,
-                    ),
-                    child: const Text("พิมพ์ 1 ฉบับ", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ],
+                child: Text(tr('close'), style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
             ),
           ),
         ],

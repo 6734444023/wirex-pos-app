@@ -4,6 +4,9 @@ import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
 import 'services/onepay_service.dart';
 import 'services/transaction_service.dart';
 import 'payment_success_page.dart';
@@ -20,10 +23,15 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
   final Color lightBlueText = const Color(0xFFB3BCF5); // สีตัวหนังสือยอดเงิน
   
   String _amountStr = ""; // เก็บค่าตัวเลขที่กดเป็น String
-  String _storeName = "WireX Portable POS";
+  String _storeName = "WireX Smart POS";
   
   Timer? _pollTimer;
   final currencyFormat = NumberFormat("#,##0.##", "en_US");
+
+  String tr(String key) {
+    final lang = Provider.of<LanguageProvider>(context, listen: false).selectedLanguage;
+    return AppTranslations.get(lang, key);
+  }
 
   @override
   void initState() {
@@ -43,7 +51,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
       final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
       if (doc.exists && mounted) {
         setState(() {
-          _storeName = doc.data()?['storeName_pos'] ?? "WireX Portable POS";
+          _storeName = doc.data()?['storeName_pos'] ?? "WireX Smart POS";
         });
       }
     }
@@ -66,6 +74,13 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
         
         _amountStr += value;
       }
+    });
+  }
+
+  // ฟังก์ชันสำหรับปุ่มคีย์ลัด
+  void _onQuickAmountPress(String amount) {
+    setState(() {
+      _amountStr = amount;
     });
   }
 
@@ -96,7 +111,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
        _showQRCodeDialog(qrCode, amount, orderId);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("ไม่สามารถสร้าง QR Code ได้")),
+        SnackBar(content: Text(tr('cannot_create_qr'))),
       );
     }
   }
@@ -143,15 +158,15 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
               ),
               
               const SizedBox(height: 16),
-              const Text("รับชำระ / Support QR", style: TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 8),
               // Bank Logos
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildBankIcon(Colors.red, "One"),
-                  _buildBankIcon(Colors.blue, "BFL"),
-                  _buildBankIcon(Colors.green, "JDB"),
+                  Image.network(
+                    'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/icon%2FmessageImage_1763726393248.jpg?alt=media',
+                    height: 40,
+                    fit: BoxFit.contain,
+                  ),
                 ],
               ),
 
@@ -166,15 +181,15 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("ยอดชำระรวม", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                      Text(tr('total_payment'), style: const TextStyle(color: Colors.grey, fontSize: 14)),
                       Text("${currencyFormat.format(amount)} LAK", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
                     ],
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      const Text("ประเภท", style: TextStyle(color: Colors.grey, fontSize: 14)),
-                      Text("ชำระด่วน", style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
+                      Text(tr('type'), style: const TextStyle(color: Colors.grey, fontSize: 14)),
+                      Text(tr('quick_pay'), style: TextStyle(color: darkBlue, fontSize: 22, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ],
@@ -195,7 +210,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                     side: BorderSide(color: darkBlue),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  child: Text("ยกเลิก / ปิด", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: Text(tr('cancel_close'), style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               )
             ],
@@ -205,18 +220,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
     );
   }
 
-  Widget _buildBankIcon(Color color, String text) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: color),
-      ),
-      child: Text(text, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 10)),
-    );
-  }
+
 
   void _goToSuccessPage(double amount, String orderId) {
     // Save Transaction
@@ -226,7 +230,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
       type: 'manual',
       status: 'paid',
       items: [
-        {'name': 'ชำระค่าบริการ', 'price': amount, 'quantity': 1}
+        {'name': tr('service_payment'), 'price': amount, 'quantity': 1}
       ],
       paymentMethod: 'qr',
       cashReceived: amount,
@@ -242,10 +246,11 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
           orderData: {'orderId': orderId},
           items: [
             // สร้างรายการจำลองสำหรับใบเสร็จ
-            {'name': 'ชำระค่าบริการ', 'price': amount, 'quantity': 1}
+            {'name': tr('service_payment'), 'price': amount, 'quantity': 1}
           ],
           cashReceived: amount, // ถือว่าจ่ายพอดี
           change: 0,
+          autoPrint: true,
         ),
       ),
     );
@@ -260,7 +265,7 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: darkBlue),
         centerTitle: true,
-        title: Text("ระบุจำนวนเงิน", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
+        title: Text(tr('enter_amount'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
       ),
       body: Column(
         children: [
@@ -281,10 +286,35 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                   Text(
                     _amountStr.isEmpty ? "0 LAK" : "${currencyFormat.format(double.tryParse(_amountStr) ?? 0)} LAK",
                     style: TextStyle(
-                      color: _amountStr.isEmpty ? Colors.grey[300] : const Color(0xFF8CA6DB), // สีฟ้าอ่อนตามรูป
+                      color: _amountStr.isEmpty ? Colors.grey[300] : darkBlue,
                       fontSize: 40,
                       fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const Spacer(),
+                  // ปุ่มคีย์ลัด
+                  Column(
+                    children: [
+                      Row(
+                        children: [
+                          _buildQuickAmountBtn('20000'),
+                          const SizedBox(width: 8),
+                          _buildQuickAmountBtn('50000'),
+                          const SizedBox(width: 8),
+                          _buildQuickAmountBtn('100000'),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          _buildQuickAmountBtn('300000'),
+                          const SizedBox(width: 8),
+                          _buildQuickAmountBtn('500000'),
+                          const SizedBox(width: 8),
+                          _buildQuickAmountBtn('1000000'),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -338,10 +368,10 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                             borderRadius: BorderRadius.circular(12),
                             boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))],
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Text(
-                              "ENTER",
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+                              tr('enter'),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
                             ),
                           ),
                         ),
@@ -364,16 +394,25 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: darkBlue, borderRadius: BorderRadius.circular(6)),
-                      child: const Icon(Icons.qr_code, color: Colors.white, size: 18),
+                      width: 26,
+                      height: 26,
+                      decoration: BoxDecoration(
+                        color: darkBlue,
+                        borderRadius: BorderRadius.zero,
+                        image: const DecorationImage(
+                          image: NetworkImage(
+                            'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/logo%2FmessageImage_1763726179957.jpg?alt=media',
+                          ),
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                     const SizedBox(width: 8),
-                    Text("WireX Portable POS", style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold, fontFamily: 'Serif')),
+                    Text(tr('wirex_pos'), style: TextStyle(color: darkBlue, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 5),
-                const Text("Call center : 02077222099", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                Text("${tr('call_center')} : 02077222099", style: const TextStyle(color: Colors.grey, fontSize: 12)),
               ],
             ),
           ),
@@ -422,6 +461,32 @@ class _ManualPaymentPageState extends State<ManualPaymentPage> {
                   label,
                   style: TextStyle(color: textColor, fontSize: 28, fontWeight: FontWeight.w500),
                 ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickAmountBtn(String amount) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => _onQuickAmountPress(amount),
+        child: Container(
+          height: 45,
+          decoration: BoxDecoration(
+            color: darkBlue,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: const Offset(0, 2))],
+          ),
+          child: Center(
+            child: Text(
+              currencyFormat.format(double.parse(amount)),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
         ),
       ),
     );

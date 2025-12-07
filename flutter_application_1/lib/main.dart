@@ -1,11 +1,24 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'dashboard_page.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'login_page.dart';
+import 'providers/language_provider.dart';
+import 'services/sunmi_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _ensureFirebaseInitialized();
-  runApp(const MyApp());
+  await SunmiService.initPrinter();
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 Future<void> _ensureFirebaseInitialized() async {
@@ -25,14 +38,30 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final languageProvider = Provider.of<LanguageProvider>(context);
+
     return MaterialApp(
-      title: 'WireX Portable POS',
+      title: 'WireX Smart POS',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E2444)),
         useMaterial3: true,
+        textTheme: GoogleFonts.rubikTextTheme(),
       ),
-      home: const DashboardPage(),
+      locale: languageProvider.locale,
+      supportedLocales: const [
+        Locale('th', 'TH'),
+        Locale('en', 'US'),
+        Locale('lo', 'LA'),
+        Locale('zh', 'CN'),
+        Locale('ko', 'KR'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: const LoginPage(),
     );
   }
 }

@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'print_preview_page.dart';
+import 'package:provider/provider.dart';
+import 'l10n/app_translations.dart';
+import 'providers/language_provider.dart';
+import 'services/sunmi_service.dart';
 
-class PaymentSuccessPage extends StatelessWidget {
+class PaymentSuccessPage extends StatefulWidget {
   final double totalAmount;
   final Map<String, dynamic> orderData;
   final List<Map<String, dynamic>> items;
   final double cashReceived;
   final double change;
   final String storeName;
+  final bool autoPrint;
 
   const PaymentSuccessPage({
     super.key,
@@ -18,7 +22,40 @@ class PaymentSuccessPage extends StatelessWidget {
     required this.storeName,
     this.cashReceived = 0,
     this.change = 0,
+    this.autoPrint = false,
   });
+
+  @override
+  State<PaymentSuccessPage> createState() => _PaymentSuccessPageState();
+}
+
+class _PaymentSuccessPageState extends State<PaymentSuccessPage> {
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoPrint) {
+      _printReceipt();
+    }
+  }
+
+  Future<void> _printReceipt() async {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    await SunmiService.printReceipt(
+      storeName: widget.storeName,
+      orderId: widget.orderData['orderId'] ?? '-',
+      items: widget.items,
+      totalAmount: widget.totalAmount,
+      cashReceived: widget.cashReceived,
+      change: widget.change,
+      paymentMethod: widget.cashReceived > 0 ? 'cash' : 'qr',
+      language: languageProvider.selectedLanguage,
+    );
+  }
+
+  String tr(String key) {
+    final languageProvider = Provider.of<LanguageProvider>(context, listen: false);
+    return AppTranslations.get(languageProvider.selectedLanguage, key);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,21 +76,26 @@ class PaymentSuccessPage extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(6),
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.zero,
+                        image: const DecorationImage(
+                          image: NetworkImage(
+                            'https://firebasestorage.googleapis.com/v0/b/wirexmenu-2fd27.firebasestorage.app/o/logo%2FmessageImage_1763726179957.jpg?alt=media',
+                          ),
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                      child: const Icon(Icons.qr_code, color: darkBlue, size: 24),
                     ),
                     const SizedBox(width: 10),
-                    const Text(
-                      "WireX Portable POS",
-                      style: TextStyle(
+                    Text(
+                      tr('wirex_pos'),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        fontFamily: 'Serif',
                       ),
                     ),
                   ],
@@ -88,9 +130,9 @@ class PaymentSuccessPage extends StatelessWidget {
 
                 const SizedBox(height: 30),
 
-                const Text(
-                  "ชำระเงินสำเร็จ",
-                  style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                Text(
+                  tr('payment_success'),
+                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                 ),
 
                 const SizedBox(height: 30),
@@ -105,45 +147,13 @@ class PaymentSuccessPage extends StatelessWidget {
                   ),
                   child: Center(
                     child: Text(
-                      "${currencyFormat.format(totalAmount)} LAK",
+                      "${currencyFormat.format(widget.totalAmount)} LAK",
                       style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
                 
                 const SizedBox(height: 50),
-
-                // ปุ่มพิมพ์ใบเสร็จ
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      // ไปหน้า Print Preview
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => PrintPreviewPage(
-                            copies: 1,
-                            storeName: storeName, // ส่งชื่อร้านไป
-                            orderData: orderData,
-                            items: items,
-                            totalAmount: totalAmount,
-                            cashReceived: cashReceived,
-                            change: change,
-                          ),
-                        ),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      side: const BorderSide(color: Colors.white),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Text("พิมพ์ใบเสร็จ", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-
-                const SizedBox(height: 16),
 
                 // ปุ่มกลับสู่เมนู
                 SizedBox(
@@ -155,7 +165,7 @@ class PaymentSuccessPage extends StatelessWidget {
                       backgroundColor: Colors.white,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text("กลับสู่เมนู", style: TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
+                    child: Text(tr('back_to_menu'), style: const TextStyle(color: darkBlue, fontSize: 16, fontWeight: FontWeight.bold)),
                   ),
                 ),
               ],
